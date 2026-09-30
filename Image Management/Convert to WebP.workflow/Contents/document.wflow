@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AMApplicationBuild</key>
+	<string>534</string>
+	<key>AMApplicationVersion</key>
+	<string>2.10</string>
+	<key>AMDocumentVersion</key>
+	<string>2</string>
+	<key>actions</key>
+	<array>
+		<dict>
+			<key>action</key>
+			<dict>
+				<key>AMAccepts</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Optional</key>
+					<true/>
+					<key>Types</key>
+					<array>
+						<string>com.apple.cocoa.string</string>
+					</array>
+				</dict>
+				<key>AMActionVersion</key>
+				<string>2.0.3</string>
+				<key>AMApplication</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>AMParameterProperties</key>
+				<dict>
+					<key>COMMAND_STRING</key>
+					<dict/>
+					<key>CheckedForUserDefaultShell</key>
+					<dict/>
+					<key>inputMethod</key>
+					<dict/>
+					<key>shell</key>
+					<dict/>
+					<key>source</key>
+					<dict/>
+				</dict>
+				<key>AMProvides</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Types</key>
+					<array>
+						<string>com.apple.cocoa.string</string>
+					</array>
+				</dict>
+				<key>ActionBundlePath</key>
+				<string>/System/Library/Automator/Run Shell Script.action</string>
+				<key>ActionName</key>
+				<string>Run Shell Script</string>
+				<key>ActionParameters</key>
+				<dict>
+					<key>COMMAND_STRING</key>
+					<string># =====================================================================
+#  Convert to WebP  —  Finder Quick Action
+#  Right-click image(s) in Finder &gt; Quick Actions &gt; Convert to WebP
+#
+#  Needs Google's free "cwebp" tool. If it isn't already installed
+#  (e.g. via Homebrew), the first run offers to download the official
+#  copy from Google into ~/Library/Application Support/MESH/webp-tools.
+#  No admin password and no Homebrew required.
+# =====================================================================
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+QUALITY=80
+WEBP_VERSION="1.6.0"
+TOOLS_DIR="$HOME/Library/Application Support/MESH/webp-tools"
+TITLE="Convert to WebP"
+
+# ---------- small helpers for on-screen messages ----------
+notify() {
+    osascript - "$1" "$TITLE" &lt;&lt;'EOF' &gt;/dev/null 2&gt;&amp;1
+on run argv
+    display notification (item 1 of argv) with title (item 2 of argv)
+end run
+EOF
+}
+
+alert() {
+    osascript - "$1" "$TITLE" &lt;&lt;'EOF' &gt;/dev/null 2&gt;&amp;1
+on run argv
+    display alert (item 2 of argv) message (item 1 of argv) as critical
+end run
+EOF
+}
+
+# Returns 0 if the person clicks "Download"
+ask_to_download() {
+    osascript - "$TITLE" &lt;&lt;'EOF' &gt;/dev/null 2&gt;&amp;1
+on run argv
+    display dialog "This action needs Google's free WebP converter (cwebp), which isn't installed on this Mac yet." &amp; return &amp; return &amp; "Download it now? It's a one-time setup and takes a few seconds." with title (item 1 of argv) buttons {"Cancel", "Download"} default button "Download" with icon note
+end run
+EOF
+}
+
+tool_works() { [[ -x "$1" ]] &amp;&amp; "$1" -version &gt;/dev/null 2&gt;&amp;1 }
+
+# ---------- find or install cwebp ----------
+CWEBP=""
+GIF2WEBP=""
+
+if command -v cwebp &gt;/dev/null 2&gt;&amp;1; then
+    CWEBP="$(command -v cwebp)"
+    GIF2WEBP="$(command -v gif2webp 2&gt;/dev/null)"
+elif tool_works "$TOOLS_DIR/bin/cwebp"; then
+    CWEBP="$TOOLS_DIR/bin/cwebp"
+    GIF2WEBP="$TOOLS_DIR/bin/gif2webp"
+else
+    ask_to_download || exit 0
+
+    case "$(uname -m)" in
+        arm64)  PLATFORM="mac-arm64" ;;
+        *)      PLATFORM="mac-x86-64" ;;
+    esac
+    PKG="libwebp-${WEBP_VERSION}-${PLATFORM}"
+    URL="https://storage.googleapis.com/downloads.webmproject.org/releases/webp/${PKG}.tar.gz"
+    TMP="$(mktemp -d)"
+
+    notify "Downloading the WebP converter…"
+    if ! curl -fsSL "$URL" -o "$TMP/webp.tar.gz" || ! tar -xzf "$TMP/webp.tar.gz" -C "$TMP"; then
+        rm -rf "$TMP"
+        alert "Couldn't download the WebP converter. Check your internet connection and try again."
+        exit 1
+    fi
+
+    mkdir -p "$TOOLS_DIR/bin"
+    cp "$TMP/$PKG/bin/cwebp" "$TMP/$PKG/bin/gif2webp" "$TOOLS_DIR/bin/" 2&gt;/dev/null
+    rm -rf "$TMP"
+    chmod +x "$TOOLS_DIR/bin/"*
+    xattr -dr com.apple.quarantine "$TOOLS_DIR" 2&gt;/dev/null
+
+    # Apple Silicon refuses to run unsigned programs; add a local signature if needed.
+    if ! tool_works "$TOOLS_DIR/bin/cwebp"; then
+        codesign --force --sign - "$TOOLS_DIR/bin/"* &gt;/dev/null 2&gt;&amp;1
+    fi
+
+    if ! tool_works "$TOOLS_DIR/bin/cwebp"; then
+        alert "The WebP converter downloaded but won't run on this Mac. Ask Daniel for help."
+        exit 1
+    fi
+
+    CWEBP="$TOOLS_DIR/bin/cwebp"
+    GIF2WEBP="$TOOLS_DIR/bin/gif2webp"
+fi
+
+# ---------- convert ----------
+converted=0
+failed=0
+failed_names=()
+
+for f in "$@"
+do
+    [[ -f "$f" ]] || continue
+    ext="${(L)${f:e}}"
+    base="${f%.*}"
+    out="${base}.webp"
+    ok=1
+
+    case "$ext" in
+        webp|avif)
+            continue ;;
+        png|jpg|jpeg|tif|tiff)
+            "$CWEBP" -quiet -q "$QUALITY" "$f" -o "$out" || ok=0 ;;
+        gif)
+            if [[ -x "$GIF2WEBP" ]]; then
+                "$GIF2WEBP" -quiet -q "$QUALITY" "$f" -o "$out" || ok=0
+            else
+                ok=0
+            fi ;;
+        *)
+            # HEIC, BMP, etc.: let macOS turn it into a PNG first, then convert.
+            tmp_dir="$(mktemp -d)"
+            tmp_png="$tmp_dir/image.png"
+            if sips -s format png "$f" --out "$tmp_png" &gt;/dev/null 2&gt;&amp;1; then
+                "$CWEBP" -quiet -q "$QUALITY" "$tmp_png" -o "$out" || ok=0
+            else
+                ok=0
+            fi
+            rm -rf "$tmp_dir" ;;
+    esac
+
+    if (( ok )); then
+        (( converted++ ))
+    else
+        (( failed++ ))
+        failed_names+=("${f:t}")
+    fi
+
+    # AVIF at quality 80 (optional — requires ImageMagick)
+    # magick "$f" -quality 80 "${base}.avif"
+done
+
+# ---------- report ----------
+if (( failed &gt; 0 )); then
+    alert "Converted $converted image(s). Couldn't convert: ${(j:, :)failed_names}"
+elif (( converted &gt; 0 )); then
+    notify "Converted $converted image(s) to WebP."
+fi
+</string>
+					<key>CheckedForUserDefaultShell</key>
+					<true/>
+					<key>inputMethod</key>
+					<integer>1</integer>
+					<key>shell</key>
+					<string>/bin/zsh</string>
+					<key>source</key>
+					<string></string>
+				</dict>
+				<key>BundleIdentifier</key>
+				<string>com.apple.RunShellScript</string>
+				<key>CFBundleVersion</key>
+				<string>2.0.3</string>
+				<key>CanShowSelectedItemsWhenRun</key>
+				<false/>
+				<key>CanShowWhenRun</key>
+				<true/>
+				<key>Category</key>
+				<array>
+					<string>AMCategoryUtilities</string>
+				</array>
+				<key>Class Name</key>
+				<string>RunShellScriptAction</string>
+				<key>InputUUID</key>
+				<string>dec20c44-bc33-4fc1-a3fa-38072d9c371d</string>
+				<key>Keywords</key>
+				<array>
+					<string>Shell</string>
+					<string>Script</string>
+					<string>Command</string>
+					<string>Run</string>
+					<string>Unix</string>
+				</array>
+				<key>OutputUUID</key>
+				<string>0f1b374e-3911-4390-9a40-cdd9ee2629b2</string>
+				<key>UUID</key>
+				<string>A1B2C3D4-0001-0002-0003-000400050006</string>
+				<key>UnlocalizedApplications</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>arguments</key>
+				<dict>
+					<key>0</key>
+					<dict>
+						<key>default value</key>
+						<integer>0</integer>
+						<key>name</key>
+						<string>inputMethod</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>0</string>
+					</dict>
+					<key>1</key>
+					<dict>
+						<key>default value</key>
+						<false/>
+						<key>name</key>
+						<string>CheckedForUserDefaultShell</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>1</string>
+					</dict>
+					<key>2</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>source</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>2</string>
+					</dict>
+					<key>3</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>COMMAND_STRING</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>3</string>
+					</dict>
+					<key>4</key>
+					<dict>
+						<key>default value</key>
+						<string>/bin/sh</string>
+						<key>name</key>
+						<string>shell</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>4</string>
+					</dict>
+				</dict>
+				<key>isViewVisible</key>
+				<integer>1</integer>
+				<key>location</key>
+				<string>732.500000:305.000000</string>
+				<key>nibPath</key>
+				<string>/System/Library/Automator/Run Shell Script.action/Contents/Resources/Base.lproj/main.nib</string>
+			</dict>
+			<key>isViewVisible</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+	<key>connectors</key>
+	<dict/>
+	<key>workflowMetaData</key>
+	<dict>
+		<key>applicationBundleIDsByPath</key>
+		<dict/>
+		<key>applicationPath</key>
+		<string>/System/Library/CoreServices/Finder.app</string>
+		<key>applicationPaths</key>
+		<array>
+			<string>/System/Library/CoreServices/Finder.app</string>
+		</array>
+		<key>inputTypeIdentifier</key>
+		<string>com.apple.Automator.fileSystemObject.image</string>
+		<key>outputTypeIdentifier</key>
+		<string>com.apple.Automator.nothing</string>
+		<key>presentationMode</key>
+		<integer>15</integer>
+		<key>processesInput</key>
+		<false/>
+		<key>serviceApplicationPath</key>
+		<string>/System/Library/CoreServices/Finder.app</string>
+		<key>serviceInputTypeIdentifier</key>
+		<string>com.apple.Automator.fileSystemObject.image</string>
+		<key>serviceOutputTypeIdentifier</key>
+		<string>com.apple.Automator.nothing</string>
+		<key>serviceProcessesInput</key>
+		<false/>
+		<key>systemImageName</key>
+		<string>NSActionTemplate</string>
+		<key>useAutomaticInputType</key>
+		<false/>
+		<key>workflowTypeIdentifier</key>
+		<string>com.apple.Automator.servicesMenu</string>
+	</dict>
+</dict>
+</plist>
