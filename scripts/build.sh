@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Rebuild the downloadable files for every Quick Action in workflows/.
+# Refresh generated files for every Quick Action in workflows/.
 #
 # For each workflows/<category>/<action>/<Name>.workflow this writes, next to it:
-#   <Name>.zip   – what people download (README links point here)
 #   script.zsh   – the embedded "Run Shell Script" source, for easy reading/diffing
 #
+# It also checks that <Name>.zip exists. The zip is NOT generated here: make it
+# on a Mac from the installed copy in ~/Library/Services (see README), because
+# the workflow's code signature lives in extended attributes that git can't store.
+#
 # Run from anywhere:  ./scripts/build.sh
-# Commit the regenerated files together with any change to a .workflow.
 
 set -euo pipefail
 shopt -s nullglob
@@ -29,33 +31,28 @@ EOF
     fi
 }
 
-make_zip() {
-    local dir="$1" name="$2"
-    rm -f "$dir/$name.zip"
-    if command -v ditto >/dev/null 2>&1; then
-        (cd "$dir" && ditto -c -k --sequesterRsrc --keepParent "$name.workflow" "$name.zip")
-    else
-        (cd "$dir" && zip -qrX "$name.zip" "$name.workflow" -x '*.DS_Store')
-    fi
-}
-
-built=0
+found=0
+missing_zip=0
 for workflow in workflows/*/*/*.workflow; do
     dir="$(dirname "$workflow")"
     name="$(basename "$workflow" .workflow)"
+    found=$((found + 1))
 
-    make_zip "$dir" "$name"
-
-    if ! extract_script "$workflow/Contents/document.wflow" "$dir/script.zsh" || [[ ! -s "$dir/script.zsh" ]]; then
+    if extract_script "$workflow/Contents/document.wflow" "$dir/script.zsh" && [[ -s "$dir/script.zsh" ]]; then
+        echo "wrote $dir/script.zsh"
+    else
         rm -f "$dir/script.zsh"
         echo "note: $workflow has no Run Shell Script as its first action; skipped script.zsh" >&2
     fi
 
-    echo "built $dir/$name.zip"
-    built=$((built + 1))
+    if [[ ! -f "$dir/$name.zip" ]]; then
+        echo "missing: $dir/$name.zip (make it on a Mac, see README)" >&2
+        missing_zip=$((missing_zip + 1))
+    fi
 done
 
-if (( built == 0 )); then
+if (( found == 0 )); then
     echo "No workflows found under workflows/<category>/<action>/" >&2
     exit 1
 fi
+(( missing_zip == 0 ))

@@ -35,11 +35,11 @@ workflows/
   <category>/                 e.g. image-management
     <action>/                 e.g. convert-to-webp
       <Name>.workflow/        the Automator bundle (source of truth)
-      <Name>.zip              generated – what people download
+      <Name>.zip              what people download – made on a Mac (see below)
       script.zsh              generated – the embedded shell script, for reading/diffs
       README.md               what the action does, requirements, how to remove it
 scripts/
-  build.sh                    regenerates every .zip and script.zsh
+  build.sh                    regenerates every script.zsh and checks each .zip exists
 ```
 
 Folder names are lowercase-with-hyphens so links stay clean; the `.workflow` keeps its human-readable name because that is what appears in the Quick Actions menu.
@@ -48,8 +48,9 @@ Folder names are lowercase-with-hyphens so links stay clean; the `.workflow` kee
 
 1. Build and save it in Automator (type: **Quick Action**), then copy the `.workflow` from `~/Library/Services/` into `workflows/<category>/<action>/`.
 2. Add a `README.md` next to it (copy an existing one as a template).
-3. Run `./scripts/build.sh` to generate the `.zip` and `script.zsh`.
-4. Add a row to the table above, under its category heading (add a new heading for a new category).
-5. Commit the `.workflow`, `.zip`, `script.zsh`, and READMEs together.
+3. Make the download zip on your Mac: put the installed `.workflow` from `~/Library/Services/` and a short `How to install.txt` in a folder, select both, right-click → **Compress 2 Items**, and save it as `<Name>.zip` in the action's folder. Build the zip from the installed copy, not the git checkout: the workflow's code signature is stored in macOS extended attributes, which git doesn't keep.
+4. Run `./scripts/build.sh` to generate `script.zsh` and check nothing is missing.
+5. Add a row to the table above, under its category heading (add a new heading for a new category).
+6. Commit the `.workflow`, `.zip`, `script.zsh`, and READMEs together.
 
-When you edit an existing action, re-run `./scripts/build.sh` so the download stays in sync with the `.workflow`.
+When you edit an existing action, re-make its zip (step 3) and re-run `./scripts/build.sh` so the download and `script.zsh` stay in sync with the `.workflow`.
