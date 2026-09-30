@@ -1,5 +1,7 @@
 # Convert to WebP
 
+**Download:** [Convert to WebP.zip](Convert%20to%20WebP.zip) · see [installing a Quick Action](../../../README.md#installing-a-quick-action)
+
 Right-click one or more images → **Quick Actions → Convert to WebP**. A `.webp` copy is saved next to each original. The originals are left untouched.
 
 - **Supported files:** PNG, JPG, TIFF, GIF, HEIC (iPhone photos), and BMP. Files that are already WebP or AVIF are skipped.
@@ -9,4 +11,4 @@ Right-click one or more images → **Quick Actions → Convert to WebP**. A `.we
 
 To fully remove it, also delete the downloaded converter at `~/Library/Application Support/MESH/webp-tools`.
 
-The script inside the workflow is also saved as [`convert-to-webp/script.zsh`](convert-to-webp/script.zsh) so it's easy to read.
+The script inside the workflow is also saved as [`script.zsh`](script.zsh) so it's easy to read.
