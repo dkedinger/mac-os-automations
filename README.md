@@ -2,9 +2,13 @@
 
 Small right-click tools for Finder on macOS. Each one installs in a couple of clicks and needs no technical setup.
 
+## Image Management
+
 | Quick Action | What it does | Download |
 |---|---|---|
-| **Convert to WebP** | Turns selected images into web-ready `.webp` copies. | [Convert to WebP.zip](convert-to-webp/Convert%20to%20WebP.zip) |
+| [**Convert to WebP**](workflows/image-management/convert-to-webp/) | Turns selected images into web-ready `.webp` copies. | [Convert to WebP.zip](workflows/image-management/convert-to-webp/Convert%20to%20WebP.zip) |
+
+Click an action's name for details on what it does and how to remove it.
 
 ---
 
@@ -22,15 +26,31 @@ Small right-click tools for Finder on macOS. Each one installs in a couple of cl
 
 ---
 
-## Convert to WebP
+## For maintainers
 
-Right-click one or more images → **Quick Actions → Convert to WebP**. A `.webp` copy is saved next to each original. The originals are left untouched.
+### Layout
 
-- **Supported files:** PNG, JPG, TIFF, GIF, HEIC (iPhone photos), and BMP. Files that are already WebP or AVIF are skipped.
-- **Quality:** 80. If a `.webp` with the same name already exists, it's replaced.
-- **First run:** you'll be asked to download Google's free WebP converter (`cwebp`). Click **Download**. It's a one-time setup that takes a few seconds and needs no password or Homebrew. If you already have `cwebp` through Homebrew, this step is skipped.
-- **Results:** a notification tells you how many images were converted, and any files that couldn't be converted are listed by name.
+```
+workflows/
+  <category>/                 e.g. image-management
+    <action>/                 e.g. convert-to-webp
+      <Name>.workflow/        the Automator bundle (source of truth)
+      <Name>.zip              what people download – made on a Mac (see below)
+      script.zsh              generated – the embedded shell script, for reading/diffs
+      README.md               what the action does, requirements, how to remove it
+scripts/
+  build.sh                    regenerates every script.zsh and checks each .zip exists
+```
 
-To fully remove it, also delete the downloaded converter at `~/Library/Application Support/MESH/webp-tools`.
+Folder names are lowercase-with-hyphens so links stay clean; the `.workflow` keeps its human-readable name because that is what appears in the Quick Actions menu.
 
-The script inside the workflow is also saved as [`convert-to-webp/script.zsh`](convert-to-webp/script.zsh) so it's easy to read.
+### Adding a Quick Action
+
+1. Build and save it in Automator (type: **Quick Action**), then copy the `.workflow` from `~/Library/Services/` into `workflows/<category>/<action>/`.
+2. Add a `README.md` next to it (copy an existing one as a template).
+3. Make the download zip on your Mac: put the installed `.workflow` from `~/Library/Services/` and a short `How to install.txt` in a folder, select both, right-click → **Compress 2 Items**, and save it as `<Name>.zip` in the action's folder. Build the zip from the installed copy, not the git checkout: the workflow's code signature is stored in macOS extended attributes, which git doesn't keep.
+4. Run `./scripts/build.sh` to generate `script.zsh` and check nothing is missing.
+5. Add a row to the table above, under its category heading (add a new heading for a new category).
+6. Commit the `.workflow`, `.zip`, `script.zsh`, and READMEs together.
+
+When you edit an existing action, re-make its zip (step 3) and re-run `./scripts/build.sh` so the download and `script.zsh` stay in sync with the `.workflow`.
