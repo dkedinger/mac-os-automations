@@ -9,4 +9,17 @@ Right-click one or more images → **Quick Actions → Convert to WebP**. A `.we
 
 To fully remove it, also delete the downloaded converter at `~/Library/Application Support/MESH/webp-tools`.
 
-The script inside the workflow is also saved as [`convert-to-webp/script.zsh`](convert-to-webp/script.zsh) so it's easy to read.
+The script inside the workflow is also saved as [`Convert to WebP/script.zsh`](Convert%20to%20WebP/script.zsh) so it's easy to read.
+
+---
+
+# Resize Images
+
+Right-click one or more images → **Quick Actions → Resize Images**. A single dialog lets you select **Maximum width** or **Maximum height**, enter the pixel limit, and choose **72 DPI** (default), **150 DPI**, or **300 DPI**.
+
+- The aspect ratio is preserved.
+- Images already smaller than the selected maximum are not enlarged.
+- The selected files are changed in place, including their DPI metadata.
+- It uses macOS's built-in `sips` tool, so no extra software is required.
+
+The source embedded in the workflow is also saved as [`Resize Images/script.zsh`](Resize%20Images/script.zsh).

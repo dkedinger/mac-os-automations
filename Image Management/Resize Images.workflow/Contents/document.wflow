@@ -1,0 +1,391 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AMApplicationBuild</key>
+	<string>534</string>
+	<key>AMApplicationVersion</key>
+	<string>2.10</string>
+	<key>AMDocumentVersion</key>
+	<string>2</string>
+	<key>actions</key>
+	<array>
+		<dict>
+			<key>action</key>
+			<dict>
+				<key>AMAccepts</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Optional</key>
+					<true/>
+					<key>Types</key>
+					<array>
+						<string>com.apple.cocoa.string</string>
+					</array>
+				</dict>
+				<key>AMActionVersion</key>
+				<string>2.0.3</string>
+				<key>AMApplication</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>AMParameterProperties</key>
+				<dict>
+					<key>COMMAND_STRING</key>
+					<dict/>
+					<key>CheckedForUserDefaultShell</key>
+					<dict/>
+					<key>inputMethod</key>
+					<dict/>
+					<key>shell</key>
+					<dict/>
+					<key>source</key>
+					<dict/>
+				</dict>
+				<key>AMProvides</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Types</key>
+					<array>
+						<string>com.apple.cocoa.string</string>
+					</array>
+				</dict>
+				<key>ActionBundlePath</key>
+				<string>/System/Library/Automator/Run Shell Script.action</string>
+				<key>ActionName</key>
+				<string>Run Shell Script</string>
+				<key>ActionParameters</key>
+				<dict>
+					<key>COMMAND_STRING</key>
+					<string>#!/bin/zsh
+# Resize Images — Finder Quick Action
+# Resizes selected images in place while preserving aspect ratio.
+# Smaller images are not enlarged. DPI metadata is set to 72, 150, or 300.
+
+set -u
+
+TITLE="Resize Images"
+
+notify() {
+    [[ "${RESIZE_IMAGES_NO_NOTIFY:-0}" == "1" ]] &amp;&amp; return 0
+    /usr/bin/osascript - "$1" "$TITLE" &lt;&lt;'APPLESCRIPT' &gt;/dev/null 2&gt;&amp;1
+on run argv
+    display notification (item 1 of argv) with title (item 2 of argv)
+end run
+APPLESCRIPT
+}
+
+alert_error() {
+    /usr/bin/osascript - "$1" "$TITLE" &lt;&lt;'APPLESCRIPT' &gt;/dev/null 2&gt;&amp;1
+on run argv
+    display alert (item 2 of argv) message (item 1 of argv) as critical
+end run
+APPLESCRIPT
+}
+
+prompt_for_options() {
+    /usr/bin/osascript &lt;&lt;'APPLESCRIPT'
+use framework "AppKit"
+use scripting additions
+
+on run
+    set nsApp to current application's NSApplication's sharedApplication()
+    nsApp's setActivationPolicy:(current application's NSApplicationActivationPolicyAccessory)
+    nsApp's activateIgnoringOtherApps:true
+
+    set panelWidth to 390
+    set accessoryView to current application's NSView's alloc()'s initWithFrame:{{0, 0}, {panelWidth, 132}}
+
+    set dimensionLabel to current application's NSTextField's labelWithString:"Limit by:"
+    dimensionLabel's setFrame:{{0, 101}, {105, 22}}
+    dimensionLabel's setAlignment:(current application's NSTextAlignmentRight)
+    accessoryView's addSubview:dimensionLabel
+
+    set dimensionMenu to current application's NSPopUpButton's alloc()'s initWithFrame:{{115, 98}, {250, 28}} pullsDown:false
+    dimensionMenu's addItemsWithTitles:{"Maximum width", "Maximum height"}
+    accessoryView's addSubview:dimensionMenu
+
+    set pixelsLabel to current application's NSTextField's labelWithString:"Maximum size:"
+    pixelsLabel's setFrame:{{0, 61}, {105, 22}}
+    pixelsLabel's setAlignment:(current application's NSTextAlignmentRight)
+    accessoryView's addSubview:pixelsLabel
+
+    set pixelsField to current application's NSTextField's alloc()'s initWithFrame:{{115, 59}, {170, 26}}
+    pixelsField's setStringValue:"1600"
+    pixelsField's setPlaceholderString:"Pixels"
+    accessoryView's addSubview:pixelsField
+
+    set pixelsSuffix to current application's NSTextField's labelWithString:"pixels"
+    pixelsSuffix's setFrame:{{295, 61}, {70, 22}}
+    accessoryView's addSubview:pixelsSuffix
+
+    set dpiLabel to current application's NSTextField's labelWithString:"Resolution:"
+    dpiLabel's setFrame:{{0, 21}, {105, 22}}
+    dpiLabel's setAlignment:(current application's NSTextAlignmentRight)
+    accessoryView's addSubview:dpiLabel
+
+    set dpiMenu to current application's NSPopUpButton's alloc()'s initWithFrame:{{115, 18}, {170, 28}} pullsDown:false
+    dpiMenu's addItemsWithTitles:{"72 DPI", "150 DPI", "300 DPI"}
+    accessoryView's addSubview:dpiMenu
+
+    set theAlert to current application's NSAlert's alloc()'s init()
+    theAlert's setMessageText:"Resize selected images"
+    theAlert's setInformativeText:"Aspect ratio is preserved. Smaller images are not enlarged. Selected files are changed in place."
+    theAlert's addButtonWithTitle:"Resize"
+    theAlert's addButtonWithTitle:"Cancel"
+    theAlert's setAccessoryView:accessoryView
+    theAlert's window()'s setInitialFirstResponder:pixelsField
+
+    set response to theAlert's runModal()
+    if (response as integer) is not equal to (current application's NSAlertFirstButtonReturn as integer) then error number -128
+
+    set dimensionIndex to dimensionMenu's indexOfSelectedItem() as integer
+    if dimensionIndex is 0 then
+        set dimensionMode to "width"
+    else
+        set dimensionMode to "height"
+    end if
+
+    set pixelValue to pixelsField's stringValue() as text
+    set dpiIndex to dpiMenu's indexOfSelectedItem() as integer
+    set dpiValues to {"72", "150", "300"}
+    set dpiValue to item (dpiIndex + 1) of dpiValues
+
+    return dimensionMode &amp; tab &amp; pixelValue &amp; tab &amp; dpiValue
+end run
+APPLESCRIPT
+}
+
+mode="${RESIZE_IMAGES_MAX_DIMENSION:-}"
+pixels="${RESIZE_IMAGES_MAX_PIXELS:-}"
+dpi="${RESIZE_IMAGES_DPI:-}"
+
+if [[ -z "$mode" || -z "$pixels" || -z "$dpi" ]]; then
+    dialog_result="$(prompt_for_options 2&gt;/dev/null)" || exit 0
+    IFS=$'\t' read -r mode pixels dpi &lt;&lt;&lt; "$dialog_result"
+fi
+
+if [[ "$mode" != "width" &amp;&amp; "$mode" != "height" ]]; then
+    alert_error "Choose either Maximum width or Maximum height."
+    exit 1
+fi
+
+if [[ ! "$pixels" =~ '^[0-9]+$' ]] || (( pixels &lt; 1 || pixels &gt; 100000 )); then
+    alert_error "Enter a maximum size from 1 to 100,000 pixels."
+    exit 1
+fi
+
+if [[ "$dpi" != "72" &amp;&amp; "$dpi" != "150" &amp;&amp; "$dpi" != "300" ]]; then
+    alert_error "Choose 72, 150, or 300 DPI."
+    exit 1
+fi
+
+processed=0
+resized=0
+failed=0
+failed_names=()
+
+for file in "$@"; do
+    [[ -f "$file" ]] || continue
+
+    width_info="$(/usr/bin/sips -g pixelWidth "$file" 2&gt;/dev/null)" || width_info=""
+    height_info="$(/usr/bin/sips -g pixelHeight "$file" 2&gt;/dev/null)" || height_info=""
+    width="${width_info##*pixelWidth: }"
+    height="${height_info##*pixelHeight: }"
+
+    if [[ ! "$width" =~ '^[0-9]+$' || ! "$height" =~ '^[0-9]+$' ]]; then
+        (( failed++ ))
+        failed_names+=("${file:t}")
+        continue
+    fi
+
+    should_resize=0
+    if [[ "$mode" == "width" ]] &amp;&amp; (( width &gt; pixels )); then
+        should_resize=1
+        resize_args=(--resampleWidth "$pixels")
+    elif [[ "$mode" == "height" ]] &amp;&amp; (( height &gt; pixels )); then
+        should_resize=1
+        resize_args=(--resampleHeight "$pixels")
+    else
+        resize_args=()
+    fi
+
+    if /usr/bin/sips "${resize_args[@]}" --setProperty dpiWidth "$dpi" --setProperty dpiHeight "$dpi" "$file" &gt;/dev/null 2&gt;&amp;1; then
+        (( processed++ ))
+        (( should_resize )) &amp;&amp; (( resized++ ))
+    else
+        (( failed++ ))
+        failed_names+=("${file:t}")
+    fi
+done
+
+if (( failed &gt; 0 )); then
+    failed_list="${(j:, :)failed_names}"
+    alert_error "Updated $processed image(s). Couldn't update: $failed_list"
+    exit 1
+elif (( processed &gt; 0 )); then
+    notify "Updated $processed image(s); resized $resized. Resolution: $dpi DPI."
+else
+    alert_error "No supported image files were selected."
+    exit 1
+fi
+</string>
+					<key>CheckedForUserDefaultShell</key>
+					<true/>
+					<key>inputMethod</key>
+					<integer>1</integer>
+					<key>shell</key>
+					<string>/bin/zsh</string>
+					<key>source</key>
+					<string></string>
+				</dict>
+				<key>BundleIdentifier</key>
+				<string>com.apple.RunShellScript</string>
+				<key>CFBundleVersion</key>
+				<string>2.0.3</string>
+				<key>CanShowSelectedItemsWhenRun</key>
+				<false/>
+				<key>CanShowWhenRun</key>
+				<true/>
+				<key>Category</key>
+				<array>
+					<string>AMCategoryUtilities</string>
+				</array>
+				<key>Class Name</key>
+				<string>RunShellScriptAction</string>
+				<key>InputUUID</key>
+				<string>2D32AFBC-121C-4AB7-B286-E819F724E74A</string>
+				<key>Keywords</key>
+				<array>
+					<string>Shell</string>
+					<string>Script</string>
+					<string>Command</string>
+					<string>Run</string>
+					<string>Unix</string>
+				</array>
+				<key>OutputUUID</key>
+				<string>D12CD67C-989F-4714-A870-A76832BC2C3D</string>
+				<key>UUID</key>
+				<string>79597B43-142D-47F8-A847-D60668E59303</string>
+				<key>UnlocalizedApplications</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>arguments</key>
+				<dict>
+					<key>0</key>
+					<dict>
+						<key>default value</key>
+						<integer>0</integer>
+						<key>name</key>
+						<string>inputMethod</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>0</string>
+					</dict>
+					<key>1</key>
+					<dict>
+						<key>default value</key>
+						<false/>
+						<key>name</key>
+						<string>CheckedForUserDefaultShell</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>1</string>
+					</dict>
+					<key>2</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>source</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>2</string>
+					</dict>
+					<key>3</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>COMMAND_STRING</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>3</string>
+					</dict>
+					<key>4</key>
+					<dict>
+						<key>default value</key>
+						<string>/bin/sh</string>
+						<key>name</key>
+						<string>shell</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>4</string>
+					</dict>
+				</dict>
+				<key>isViewVisible</key>
+				<integer>1</integer>
+				<key>location</key>
+				<string>732.500000:305.000000</string>
+				<key>nibPath</key>
+				<string>/System/Library/Automator/Run Shell Script.action/Contents/Resources/Base.lproj/main.nib</string>
+			</dict>
+			<key>isViewVisible</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+	<key>connectors</key>
+	<dict/>
+	<key>workflowMetaData</key>
+	<dict>
+		<key>applicationBundleIDsByPath</key>
+		<dict/>
+		<key>applicationPath</key>
+		<string>/System/Library/CoreServices/Finder.app</string>
+		<key>applicationPaths</key>
+		<array>
+			<string>/System/Library/CoreServices/Finder.app</string>
+		</array>
+		<key>inputTypeIdentifier</key>
+		<string>com.apple.Automator.fileSystemObject.image</string>
+		<key>outputTypeIdentifier</key>
+		<string>com.apple.Automator.nothing</string>
+		<key>presentationMode</key>
+		<integer>15</integer>
+		<key>processesInput</key>
+		<false/>
+		<key>serviceApplicationPath</key>
+		<string>/System/Library/CoreServices/Finder.app</string>
+		<key>serviceInputTypeIdentifier</key>
+		<string>com.apple.Automator.fileSystemObject.image</string>
+		<key>serviceOutputTypeIdentifier</key>
+		<string>com.apple.Automator.nothing</string>
+		<key>serviceProcessesInput</key>
+		<false/>
+		<key>systemImageName</key>
+		<string>NSActionTemplate</string>
+		<key>useAutomaticInputType</key>
+		<false/>
+		<key>workflowTypeIdentifier</key>
+		<string>com.apple.Automator.servicesMenu</string>
+	</dict>
+</dict>
+</plist>

@@ -4,7 +4,8 @@ Small right-click tools for Finder on macOS. Each one installs in a couple of cl
 
 | Quick Action | What it does | Download |
 |---|---|---|
-| **Convert to WebP** | Turns selected images into web-ready `.webp` copies. | [Convert to WebP.zip](convert-to-webp/Convert%20to%20WebP.zip) |
+| **Convert to WebP** | Turns selected images into web-ready `.webp` copies. | [Convert to WebP.zip](Image%20Management/Convert%20to%20WebP.zip) |
+| **Resize Images** | Limits selected images by maximum width or height and sets 72, 150, or 300 DPI. | [Resize Images.zip](Image%20Management/Resize%20Images.zip) |
 
 ---
 
