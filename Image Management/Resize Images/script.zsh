@@ -75,7 +75,6 @@ on run
     theAlert's addButtonWithTitle:"Resize"
     theAlert's addButtonWithTitle:"Cancel"
     theAlert's setAccessoryView:accessoryView
-    theAlert's window()'s setInitialFirstResponder:pixelsField
 
     set response to theAlert's runModal()
     if (response as integer) is not equal to (current application's NSAlertFirstButtonReturn as integer) then error number -128
